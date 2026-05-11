@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sara Abacus — Student Login</title>
+    <meta name="description" content="Login to Sara Abacus student portal to access quizzes and track your progress.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css?v=2.0">
+</head>
+<body>
+    <div class="container">
+        <h1><u>Sara Abacus</u></h1>
+        <h2>Student Login</h2>
+        <form id="login-form">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="you@saraabacus.com" required>
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" placeholder="Enter your password" required>
+            <button type="submit">Sign In</button>
+        </form>
+        <p id="error-message"></p>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { firebaseConfig } from './firebaseConfig.js';
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        document.getElementById('login-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorEl = document.getElementById('error-message');
+            const submitBtn = this.querySelector('button[type="submit"]');
+            
+            // Clear previous errors
+            errorEl.textContent = '';
+            submitBtn.textContent = 'Signing in...';
+            submitBtn.disabled = true;
+
+            signInWithEmailAndPassword(auth, email, password)
+                .then((userCredential) => {
+                    const user = userCredential.user;
+                    localStorage.setItem('user', JSON.stringify(user));
+                    window.location.href = 'dashboard.html';
+                })
+                .catch((error) => {
+                    let msg = 'Login failed. Please try again.';
+                    if (error.code === 'auth/user-not-found') msg = 'No account found with this email.';
+                    else if (error.code === 'auth/wrong-password') msg = 'Incorrect password.';
+                    else if (error.code === 'auth/invalid-email') msg = 'Please enter a valid email.';
+                    else if (error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try again later.';
+                    errorEl.textContent = msg;
+                    submitBtn.textContent = 'Sign In';
+                    submitBtn.disabled = false;
+                });
+        });
+    </script>
+</body>
+</html>
