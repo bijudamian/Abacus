@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "public": false,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build"
+    }
+  ],
+  "routes": [
+    { "src": "/admin/(.*)", "dest": "/public/$1" },
+    { "src": "/Student/(.*)", "dest": "/Student/public/$1" },
+    { "src": "/(.*)", "dest": "/Student/public/$1" }
+  ]
+}

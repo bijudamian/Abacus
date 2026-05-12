@@ -1,11 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {firebaseConfig} from './firebaseConfig.js';
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
+import { supabase } from './supabaseClient.js';
 
 const scoresTableBody = document.getElementById('scoresTableBody');
 const authSection = document.getElementById('authSection');
@@ -32,9 +25,9 @@ function showToast(message, type = 'success') {
 
 document.addEventListener('DOMContentLoaded', () => {
     // Handle authentication
-    document.getElementById('authForm').addEventListener('submit', (event) => {
+    document.getElementById('authForm').addEventListener('submit', async (event) => {
         event.preventDefault();
-        const pemail = 'sara@admin.com'
+        const pemail = 'sara@admin.com';
         const email = document.getElementById('adminEmail').value;
         const password = document.getElementById('adminPassword').value;
         const submitBtn = event.target.querySelector('button[type="submit"]');
@@ -43,23 +36,26 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.textContent = 'Signing in...';
             submitBtn.disabled = true;
 
-            signInWithEmailAndPassword(auth, email, password)
-                .then(() => {
-                    authSection.classList.add('hidden');
-                    adminSection.classList.remove('hidden');
-                    fetchScores();
-                })
-                .catch(error => {
-                    console.error('Error during login:', error.message);
-                    showToast('Login failed. Please check your credentials.', 'error');
-                    submitBtn.textContent = 'Sign In';
-                    submitBtn.disabled = false;
-                });
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (error) {
+                console.error('Error during login:', error.message);
+                showToast('Login failed. Please check your credentials.', 'error');
+                submitBtn.textContent = 'Sign In';
+                submitBtn.disabled = false;
+            } else {
+                localStorage.setItem('supabaseToken', data.session.access_token);
+                authSection.classList.add('hidden');
+                adminSection.classList.remove('hidden');
+                fetchScores();
+            }
         } else {
             showToast('Unauthorized. Admin access only.', 'error');
         }
     });
-    
 
     levelSelect.addEventListener('change', fetchScores);
 
@@ -73,19 +69,40 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.textContent = 'Adding...';
         submitBtn.disabled = true;
 
+        const token = localStorage.getItem('supabaseToken');
+        let data, error;
         try {
-            const user = await createUserWithEmailAndPassword(auth, email, password);
-            console.log('User created and added to Firestore:', user);
+            const response = await fetch('https://lpbrfmaevpidtyhakhfw.supabase.co/functions/v1/create-student', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ email, password })
+            });
+            const result = await response.json();
+            if (result.error) {
+                error = { message: result.error };
+            } else {
+                data = result;
+            }
+        } catch(e) {
+            error = { message: 'Network error' };
+        }
+
+        if (error) {
+            console.error('Error creating user:', error.message);
+            let msg = 'Failed to create user.';
+            if (error.message.includes('already exists')) msg = 'This student already exists.';
+            else if (error.message.includes('Password should be at least 6 characters')) msg = 'Password must be at least 6 characters.';
+            showToast(msg, 'error');
+            submitBtn.textContent = 'Add Student';
+            submitBtn.disabled = false;
+        } else {
+            console.log('User created:', data);
             showToast(`Student "${studentName}" created successfully!`, 'success');
             document.getElementById('studentName').value = '';
             document.getElementById('password').value = '';
-        } catch (error) {
-            console.error('Error creating user:', error.message);
-            let msg = 'Failed to create user.';
-            if (error.code === 'auth/email-already-in-use') msg = 'This student already exists.';
-            else if (error.code === 'auth/weak-password') msg = 'Password must be at least 6 characters.';
-            showToast(msg, 'error');
-        } finally {
             submitBtn.textContent = 'Add Student';
             submitBtn.disabled = false;
         }
@@ -94,12 +111,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Logout button
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            auth.signOut().then(() => {
-                adminSection.classList.add('hidden');
-                authSection.classList.remove('hidden');
-                showToast('Logged out successfully.');
-            });
+        logoutBtn.addEventListener('click', async () => {
+            await supabase.auth.signOut();
+            adminSection.classList.add('hidden');
+            authSection.classList.remove('hidden');
+            showToast('Logged out successfully.');
         });
     }
 });
@@ -108,22 +124,26 @@ async function fetchScores() {
     try {
         scoresTableBody.innerHTML = '';
         const selectedLevel = levelSelect.value;
-        const scoresSnapshot = await getDocs(collection(db, 'scores'));
+
+        let query = supabase.from('scores').select('*');
+        if (selectedLevel !== 'all') {
+            query = query.eq('level', selectedLevel);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
         let rowCount = 0;
 
-        scoresSnapshot.forEach((doc) => {
-            const studentName = doc.id;
-            const levels = doc.data();
+        data.forEach((row) => {
+            const studentName = row.student_name;
+            const level = row.level;
+            const score = row.score;
+            const maxScore = row.max_score || '?';
 
-            for (const level in levels) {
-                if (levels[level].hasOwnProperty('score') && (selectedLevel === 'all' || selectedLevel === level)) {
-                    const score = levels[level].score;
-                    const maxScore = levels[level].maxScore || '?';
-                    const row = createTableRow(studentName, level, score, maxScore);
-                    scoresTableBody.appendChild(row);
-                    rowCount++;
-                }
-            }
+            const tr = createTableRow(studentName, level, score, maxScore);
+            scoresTableBody.appendChild(tr);
+            rowCount++;
         });
 
         if (rowCount === 0) {
@@ -155,3 +175,65 @@ function createTableRow(studentName, level, score, maxScore) {
 
     return row;
 }
+
+
+    // Manage UI Sections
+    const questionsSection = document.getElementById('questionsSection');
+    const permissionsSection = document.getElementById('permissionsSection');
+
+    document.getElementById('manageQuestionsBtn').addEventListener('click', () => {
+        questionsSection.classList.remove('hidden');
+    });
+    document.getElementById('closeQuestionsBtn').addEventListener('click', () => {
+        questionsSection.classList.add('hidden');
+    });
+
+    document.getElementById('managePermissionsBtn').addEventListener('click', () => {
+        permissionsSection.classList.remove('hidden');
+    });
+    document.getElementById('closePermissionsBtn').addEventListener('click', () => {
+        permissionsSection.classList.add('hidden');
+    });
+
+    // Add Custom Question
+    document.getElementById('addQuestionForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const level = document.getElementById('qLevel').value;
+        const question = document.getElementById('qHtml').value;
+        const optionsStr = document.getElementById('qOptions').value;
+        const answer = parseInt(document.getElementById('qAnswer').value);
+
+        const options = optionsStr.split(',').map(v => parseInt(v.trim()));
+
+        const { error } = await supabase.from('custom_questions').insert([{
+            level, question, options, answer
+        }]);
+
+        if (error) {
+            showToast('Failed to add question', 'error');
+            console.error(error);
+        } else {
+            showToast('Question added successfully!');
+            e.target.reset();
+        }
+    });
+
+    // Update Permissions
+    document.getElementById('updatePermissionsForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const student_name = document.getElementById('permStudentName').value.trim();
+        const levelsStr = document.getElementById('permLevels').value;
+        const allowed_levels = levelsStr.split(',').map(v => v.trim());
+
+        const { error } = await supabase.from('student_permissions').upsert({
+            student_name, allowed_levels
+        });
+
+        if (error) {
+            showToast('Failed to update permissions', 'error');
+            console.error(error);
+        } else {
+            showToast('Permissions updated successfully!');
+            e.target.reset();
+        }
+    });

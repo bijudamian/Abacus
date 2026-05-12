@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abacus Quiz</title>
+    <link rel="stylesheet" href="quiz.css?v=2.0">
+</head>
+
+<body>
+    <div class="countdown-overlay" id="countdown-overlay">
+        <div class="countdown-container">
+            <h1 id="countdown">3</h1>
+        </div>
+    </div>
+    <div class="quiz-container" id="quiz" style="display: none;">
+        <div id="timer">Time Taken: <span id="time">00:00</span></div>
+        <div class="quiz-header">
+            <h2 id="question">Question text</h2>
+
+            <ul>
+                <li>
+                    <input type="radio" id="0" name="answer" class="answer" />
+                    <label id="a_text" for="0">Option</label>
+                </li>
+                <li>
+                    <input type="radio" id="1" name="answer" class="answer" />
+                    <label id="b_text" for="1">Option</label>
+                </li>
+                <li>
+                    <input type="radio" id="2" name="answer" class="answer" />
+                    <label id="c_text" for="2">Option</label>
+                </li>
+            </ul>
+        </div>
+        <button id="previous">Previous</button>
+        <button id="next">Next</button>
+        <button id="submit" style="display:none;">Submit</button>
+    </div>
+
+    <div id="result-section" style="display: none;">
+    </div>
+
+    <script type="module">
+        import { supabase } from './supabaseClient.js';
+
+        let quizData = [];
+        let currentQuiz = 0;
+        let userAnswers = [];
+        let quizId = null;
+        let timerInterval = null;
+        let timeElapsed = 0;
+
+        const quizEl = document.getElementById('quiz');
+        const answerEls = document.querySelectorAll('.answer');
+        const questionEl = document.getElementById('question');
+        const a_text = document.getElementById('a_text');
+        const b_text = document.getElementById('b_text');
+        const c_text = document.getElementById('c_text');
+        const nextBtn = document.getElementById('next');
+        const prevBtn = document.getElementById('previous');
+        const submitBtn = document.getElementById('submit');
+        const resultSection = document.getElementById('result-section');
+        const timeEl = document.getElementById('time');
+        const countdownEl = document.getElementById('countdown');
+        const countdownOverlay = document.getElementById('countdown-overlay');
+
+        function init() {
+            const storedQuiz = localStorage.getItem('currentQuiz');
+            if (!storedQuiz) {
+                window.location.href = 'dashboard.html';
+                return;
+            }
+
+            const data = JSON.parse(storedQuiz);
+            quizData = data.questions;
+            quizId = data.quizId;
+            userAnswers = new Array(quizData.length).fill(null);
+
+            startCountdown();
+        }
+
+        function startCountdown() {
+            let count = 3;
+            countdownEl.textContent = count;
+            const intv = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownEl.textContent = count;
+                } else if (count === 0) {
+                    countdownEl.textContent = 'GO!';
+                } else {
+                    clearInterval(intv);
+                    countdownOverlay.style.display = 'none';
+                    quizEl.style.display = 'block';
+                    loadQuiz();
+                    startTimer();
+                }
+            }, 1000);
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeElapsed++;
+                const minutes = Math.floor(timeElapsed / 60).toString().padStart(2, '0');
+                const seconds = (timeElapsed % 60).toString().padStart(2, '0');
+                timeEl.textContent = `${minutes}:${seconds}`;
+            }, 1000);
+        }
+
+        function loadQuiz() {
+            deselectAnswers();
+
+            const currentQuizData = quizData[currentQuiz];
+            questionEl.innerHTML = currentQuizData.question;
+            a_text.innerText = currentQuizData.options[0];
+            b_text.innerText = currentQuizData.options[1];
+            c_text.innerText = currentQuizData.options[2];
+
+            // Restore selection if previously answered
+            if (userAnswers[currentQuiz] !== null) {
+                document.getElementById(userAnswers[currentQuiz].toString()).checked = true;
+            }
+
+            if (currentQuiz === quizData.length - 1) {
+                nextBtn.style.display = 'none';
+                submitBtn.style.display = 'inline-block';
+            } else {
+                nextBtn.style.display = 'inline-block';
+                submitBtn.style.display = 'none';
+            }
+        }
+
+        function deselectAnswers() {
+            answerEls.forEach(answerEl => answerEl.checked = false);
+        }
+
+        function getSelected() {
+            let answer = null;
+            answerEls.forEach(answerEl => {
+                if(answerEl.checked) {
+                    answer = parseInt(answerEl.id);
+                }
+            });
+            return answer;
+        }
+
+        nextBtn.addEventListener('click', () => {
+            const answer = getSelected();
+            userAnswers[currentQuiz] = answer;
+            if (currentQuiz < quizData.length - 1) {
+                currentQuiz++;
+                loadQuiz();
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (currentQuiz > 0) {
+                const answer = getSelected();
+                userAnswers[currentQuiz] = answer;
+                currentQuiz--;
+                loadQuiz();
+            }
+        });
+
+        submitBtn.addEventListener('click', async () => {
+            userAnswers[currentQuiz] = getSelected();
+            clearInterval(timerInterval);
+
+            quizEl.style.display = 'none';
+            resultSection.style.display = 'block';
+            resultSection.innerHTML = '<h2>Validating...</h2>';
+
+            const token = localStorage.getItem('supabaseToken');
+
+            try {
+                const response = await fetch('https://lpbrfmaevpidtyhakhfw.supabase.co/functions/v1/validate-quiz', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ quizId, answers: userAnswers })
+                });
+
+                const result = await response.json();
+
+                if (result.error) {
+                    resultSection.innerHTML = `<h2>Error validating quiz: ${result.error}</h2>`;
+                } else {
+                    resultSection.innerHTML = `
+                        <h2>You scored ${result.score}/${result.maxScore}</h2>
+                        <p>Time Taken: ${timeEl.textContent}</p>
+                        <button onclick="window.location.href='dashboard.html'" style="padding: 10px; margin-top: 20px;">Back to Dashboard</button>
+                    `;
+                    localStorage.removeItem('currentQuiz');
+                }
+            } catch(e) {
+                resultSection.innerHTML = `<h2>Error connecting to server.</h2>`;
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
