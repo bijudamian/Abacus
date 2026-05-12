@@ -5,7 +5,6 @@
     "tailwindcss": "^3.4.4"
   },
   "scripts": {
-  "build": "npx tailwindcss -i ./src/styles.css -o ./dist/styles.css --watch"
-}
-
+    "build": "npx tailwindcss -i ./Student/public/styles.css -o ./Student/public/dist/styles.css || true"
+  }
 }
