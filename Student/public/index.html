@@ -25,14 +25,9 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { firebaseConfig } from './firebaseConfig.js';
+        import { supabase } from './supabaseClient.js';
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-
-        document.getElementById('login-form').addEventListener('submit', function(event) {
+        document.getElementById('login-form').addEventListener('submit', async function(event) {
             event.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
@@ -44,22 +39,24 @@
             submitBtn.textContent = 'Signing in...';
             submitBtn.disabled = true;
 
-            signInWithEmailAndPassword(auth, email, password)
-                .then((userCredential) => {
-                    const user = userCredential.user;
-                    localStorage.setItem('user', JSON.stringify(user));
-                    window.location.href = 'dashboard.html';
-                })
-                .catch((error) => {
-                    let msg = 'Login failed. Please try again.';
-                    if (error.code === 'auth/user-not-found') msg = 'No account found with this email.';
-                    else if (error.code === 'auth/wrong-password') msg = 'Incorrect password.';
-                    else if (error.code === 'auth/invalid-email') msg = 'Please enter a valid email.';
-                    else if (error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try again later.';
-                    errorEl.textContent = msg;
-                    submitBtn.textContent = 'Sign In';
-                    submitBtn.disabled = false;
-                });
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (error) {
+                let msg = 'Login failed. Please try again.';
+                if (error.message.includes('Invalid login credentials')) msg = 'Incorrect email or password.';
+                else if (error.message.includes('Email not confirmed')) msg = 'Please confirm your email.';
+                errorEl.textContent = msg;
+                submitBtn.textContent = 'Sign In';
+                submitBtn.disabled = false;
+            } else {
+                localStorage.setItem('user', JSON.stringify(data.user));
+                localStorage.setItem('userName', email.split('@')[0]); // For compatibility with older code
+                localStorage.setItem('supabaseToken', data.session.access_token);
+                window.location.href = 'dashboard.html';
+            }
         });
     </script>
 </body>

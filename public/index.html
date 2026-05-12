@@ -456,7 +456,11 @@
                 Sara Abacus
                 <span>Admin Dashboard</span>
             </h1>
-            <button class="btn-logout" id="logoutBtn" type="button">Logout</button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-primary" id="manageQuestionsBtn" type="button">Manage Questions</button>
+                <button class="btn-primary" id="managePermissionsBtn" type="button">Manage Permissions</button>
+                <button class="btn-logout" id="logoutBtn" type="button">Logout</button>
+            </div>
         </div>
 
         <!-- Add User Card -->
@@ -474,6 +478,54 @@
                 </div>
                 <button type="submit" class="btn-add">Add Student</button>
             </form>
+        </div>
+
+
+        <!-- Custom Questions Card -->
+        <div class="card hidden" id="questionsSection">
+            <h2>📝 Manage Custom Questions</h2>
+            <form id="addQuestionForm" class="add-user-form" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label>Level</label>
+                    <select id="qLevel" required>
+                        <option value="level1">Level 1</option><option value="level2">Level 2</option>
+                        <option value="level3">Level 3</option><option value="level4">Level 4</option>
+                        <option value="level5">Level 5</option><option value="level6">Level 6</option>
+                        <option value="level7">Level 7</option><option value="level8">Level 8</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Question HTML (e.g. &lt;p&gt;1&lt;/p&gt;&lt;p&gt;2&lt;/p&gt;)</label>
+                    <input type="text" id="qHtml" required>
+                </div>
+                <div class="form-group">
+                    <label>Options (comma separated, e.g. 1,2,3)</label>
+                    <input type="text" id="qOptions" required>
+                </div>
+                <div class="form-group">
+                    <label>Correct Answer</label>
+                    <input type="number" id="qAnswer" required>
+                </div>
+                <button type="submit" class="btn-add">Add Question</button>
+            </form>
+            <button id="closeQuestionsBtn" class="btn-logout">Close</button>
+        </div>
+
+        <!-- Permissions Card -->
+        <div class="card hidden" id="permissionsSection">
+            <h2>🔐 Manage Student Permissions</h2>
+            <form id="updatePermissionsForm" class="add-user-form" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label>Student Name</label>
+                    <input type="text" id="permStudentName" required>
+                </div>
+                <div class="form-group">
+                    <label>Allowed Levels (comma separated, e.g. level1,level2)</label>
+                    <input type="text" id="permLevels" required>
+                </div>
+                <button type="submit" class="btn-add">Update Permissions</button>
+            </form>
+            <button id="closePermissionsBtn" class="btn-logout">Close</button>
         </div>
 
         <!-- Scores Card -->

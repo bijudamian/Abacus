@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: sara-abacus
+    env: static
+    buildCommand: npm install && npm run build || true
+    staticPublishPath: .

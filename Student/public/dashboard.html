@@ -504,15 +504,7 @@
     </div>
 
     <script type="module">
-        // Import Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-        import {firebaseConfig} from './firebaseConfig.js';
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        import { supabase } from './supabaseClient.js';
 
         // DOM refs
         const modal = document.getElementById('perfModal');
@@ -542,7 +534,8 @@
         });
 
         // --- Auth ---
-        onAuthStateChanged(auth, async (user) => {
+        async function checkAuth() {
+            const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 const email = user.email;
                 const userName = capitalizeFirstLetter(email.substring(0, email.indexOf('@')));
@@ -554,7 +547,8 @@
                 document.getElementById('greeting').textContent = 'Welcome!';
                 document.getElementById('logout-button').style.display = 'none';
             }
-        });
+        }
+        checkAuth();
 
         const capitalizeFirstLetter = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -589,11 +583,16 @@
             if (!userName) { modalBody.innerHTML = '<p>Not logged in.</p>'; return; }
 
             try {
-                const userDocRef = doc(collection(db, 'scores'), userName);
-                const docSnapshot = await getDoc(userDocRef);
+                const { data, error } = await supabase
+                    .from('scores')
+                    .select('*')
+                    .eq('student_name', userName)
+                    .eq('level', 'level' + level)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
 
-                if (docSnapshot.exists() && docSnapshot.data()[`level${level}`]?.results) {
-                    const html = generatePerformanceHTML(docSnapshot.data()[`level${level}`].results);
+                if (data && data.length > 0 && data[0].results) {
+                    const html = generatePerformanceHTML(data[0].results);
                     modalBody.innerHTML = html;
                 } else {
                     modalBody.innerHTML = '<p style="text-align:center;color:#94a3b8;padding:40px">No performance data available for this level.</p>';
@@ -607,25 +606,36 @@
         // --- Score cards ---
         const fetchAndDisplayScores = async (userName) => {
             try {
-                const userDocRef = doc(collection(db, 'scores'), userName);
-                const docSnapshot = await getDoc(userDocRef);
+                const { data, error } = await supabase
+                    .from('scores')
+                    .select('*')
+                    .eq('student_name', userName);
+
                 const levelsContainer = document.querySelector('.quiz-levels');
 
-                if (docSnapshot.exists()) {
-                    const scoreData = docSnapshot.data();
+                if (data && data.length > 0) {
                     levelsContainer.innerHTML = '';
-                    for (const [key, value] of Object.entries(scoreData)) {
+
+                    // Group by level to get the latest
+                    const latestScores = {};
+                    data.forEach(row => {
+                        if (!latestScores[row.level] || new Date(row.created_at) > new Date(latestScores[row.level].created_at)) {
+                            latestScores[row.level] = row;
+                        }
+                    });
+
+                    for (const [key, value] of Object.entries(latestScores)) {
                         const level = key.replace('level', '');
                         const el = document.createElement('div');
                         el.className = 'score-container';
                         el.id = `level-${level}-score`;
 
-                        const pct = Math.round((value.score / value.maxScore) * 100);
+                        const pct = Math.round((value.score / value.max_score) * 100);
                         const color = pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--error)';
 
                         el.innerHTML = `
                             <h2>📊 Abacus Level ${level}</h2>
-                            <p>Latest Score: <strong style="color:${color}">${value.score}</strong> / ${value.maxScore} <span style="color:${color};font-size:0.85rem">(${pct}%)</span></p>
+                            <p>Latest Score: <strong style="color:${color}">${value.score}</strong> / ${value.max_score} <span style="color:${color};font-size:0.85rem">(${pct}%)</span></p>
                             <button class="view-performance-button" data-level="${level}" type="button">View Performance</button>
                         `;
                         levelsContainer.appendChild(el);
@@ -646,12 +656,12 @@
         });
 
         // --- Logout ---
-        document.getElementById('logout-button').addEventListener('click', () => {
-            signOut(auth).then(() => {
-                localStorage.removeItem('userName');
-                localStorage.removeItem('user');
-                window.location.href = 'index.html';
-            }).catch(err => console.error('Sign out error', err));
+        document.getElementById('logout-button').addEventListener('click', async () => {
+            await supabase.auth.signOut();
+            localStorage.removeItem('userName');
+            localStorage.removeItem('user');
+            localStorage.removeItem('supabaseToken');
+            window.location.href = 'index.html';
         });
 
         // --- Sidebar toggle ---
@@ -676,7 +686,7 @@
             const sidebar = document.getElementById('sidebar');
             const levelsContainer = document.querySelector('.quiz-levels');
 
-            const quizUrls = ['quiz1.html','quiz2.html','quiz3.html','quiz4.html','quiz5.html','quiz6.html','quiz7.html','quiz8.html'];
+            const quizUrls = ['quiz.html?level=1','quiz.html?level=2','quiz.html?level=3','quiz.html?level=4','quiz.html?level=5','quiz.html?level=6','quiz.html?level=7','quiz.html?level=8'];
             const releaseDates = [
                 new Date('2024-07-20'),
                 new Date('2024-10-17'),
@@ -694,16 +704,16 @@
             quizUrls.forEach((url, index) => {
                 const level = index + 1;
                 const quizLink = document.createElement('a');
-                quizLink.href = url;
+                quizLink.href = '#'; // Handled via JS
+                quizLink.className = 'btn-start';
+                quizLink.dataset.level = 'level' + level;
                 quizLink.textContent = `Abacus Level ${level}`;
 
                 if (currentDate >= releaseDates[index]) {
                     quizLink.classList.add('available');
                 } else {
                     quizLink.classList.add('unavailable');
-                    quizLink.href = '#';
                     quizLink.title = `Available from ${releaseDates[index].toDateString()}`;
-                    quizLink.onclick = (e) => e.preventDefault();
                 }
 
                 sidebar.appendChild(quizLink);
@@ -718,6 +728,45 @@
                 levelsContainer.appendChild(levelElement);
             });
         };
+
+        document.addEventListener('click', async (e) => {
+            if (e.target && e.target.classList.contains('btn-start')) {
+                e.preventDefault();
+                if (e.target.classList.contains('unavailable')) return;
+
+                const level = e.target.dataset.level;
+                const token = localStorage.getItem('supabaseToken');
+                const btnOriginalText = e.target.innerHTML;
+                e.target.innerHTML = 'Generating...';
+                e.target.style.pointerEvents = 'none';
+
+                try {
+                    const response = await fetch('https://lpbrfmaevpidtyhakhfw.supabase.co/functions/v1/generate-quiz', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ level })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.quizId) {
+                        localStorage.setItem('currentQuiz', JSON.stringify(data));
+                        window.location.href = 'quiz.html';
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to generate quiz'));
+                        e.target.innerHTML = btnOriginalText;
+                        e.target.style.pointerEvents = 'auto';
+                    }
+                } catch(error) {
+                    alert('Error: Could not reach the server.');
+                    e.target.innerHTML = btnOriginalText;
+                    e.target.style.pointerEvents = 'auto';
+                }
+            }
+        });
 
         fetchQuizzes();
     </script>
