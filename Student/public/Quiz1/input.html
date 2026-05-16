@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Input</title>
+    <style>
+        .form-container {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 500px;
+            padding: 20px;
+            text-align: center;
+            font-size: 18px;
+            margin: 20px auto;
+        }
+
+        .form-container h1 {
+            margin-bottom: 20px;
+            font-size: 24px;
+            color: #333;
+        }
+
+        .form-container label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .form-container input {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .form-container button {
+            background: #427f36;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.3s ease;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+
+        .form-container button:hover {
+            background: #9face6;
+            transform: scale(1.05);
+        }
+
+        .form-container pre {
+            text-align: left;
+            background: #f1f1f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            width: 700px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .form-container .copy-btn {
+            background: #007bff;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.3s ease;
+            font-size: 16px;
+            margin-top: 20px;
+            display: none; /* Hide initially */
+        }
+
+        .form-container .copy-btn:hover {
+            background: #0056b3;
+            transform: scale(1.05);
+        }
+
+        .question-item {
+            margin-top: 10px;
+        }
+
+        #questionList{
+            margin-top: 30px;
+        }
+        #output{
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h1>Input Quiz Questions</h1>
+        <form id="questionForm">
+            <label for="numbers">Enter numbers (space separated):</label>
+            <input type="text" id="numbers" name="numbers" required>
+            <button type="submit">Add Question</button>
+        </form>
+        <div id="questionList"></div>
+        <button id="generateButton" style="display:none;">Generate Quiz</button>
+        <button class="copy-btn" id="copyButton" style="display:none;">Copy to Clipboard</button>
+        <div id="output"></div>
+       
+    </div>
+
+    <script>
+        const questionForm = document.getElementById('questionForm');
+        const numbersInput = document.getElementById('numbers');
+        const questionList = document.getElementById('questionList');
+        const outputDiv = document.getElementById('output');
+        const generateButton = document.getElementById('generateButton');
+        const copyButton = document.getElementById('copyButton');
+        let allQuestions = [];
+        let quizData = [];
+
+        function generateOptionsAndAnswer(row) {
+            const correctAnswer = row.reduce((acc, num) => acc + num, 0);
+            const options = [correctAnswer];
+            while (options.length < 3) {
+                const option = correctAnswer + Math.floor(Math.random() * 15) - 6;
+                if (option !== correctAnswer && !options.includes(option) && option > 0) {
+                    options.push(option);
+                }
+            }
+            options.sort(() => Math.random() - 0.5);
+            return { options, answer: correctAnswer };
+        }
+
+        questionForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const numbers = numbersInput.value.split(' ').map(num => parseInt(num.trim())).filter(num => !isNaN(num));
+            if (numbers.length > 0) {
+                allQuestions.push(numbers);
+                const questionHtml = numbers.map(num => `<span class="question-item">${num},</span>`).join('');
+                questionList.innerHTML += `<div>${questionHtml}</div>`;
+                numbersInput.value = '';
+                generateButton.style.display = 'inline-block';
+            }
+        });
+
+        generateButton.addEventListener('click', function() {
+            allQuestions.forEach(question => {
+                const { options, answer } = generateOptionsAndAnswer(question);
+                const questionHtml = question.map(num => `&lt;p&gt;${num}&lt;/p&gt;`).join('');
+                const questionObject = {
+                    question: questionHtml,
+                    options: options,
+                    answer: answer
+                };
+                quizData.push(questionObject);
+            });
+
+            allQuestions = [];
+            questionList.innerHTML = '';
+            generateButton.style.display = 'none';
+            const questionJSON = JSON.stringify(quizData, null, 2);
+            outputDiv.innerHTML = `<pre>${questionJSON}</pre>`;
+            copyButton.style.display = 'inline-block';
+        });
+
+        copyButton.addEventListener('click', function() {
+            const textToCopy = outputDiv.textContent;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert('Quiz data copied to clipboard!');
+            }).catch(err => {
+                console.error('Error copying text: ', err);
+            });
+        });
+    </script>
+</body>
+</html>

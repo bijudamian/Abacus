@@ -78,6 +78,7 @@ def main():
     print("Generated Questions (Formatted):")
     for i, q in enumerate(questions):
         end = ',' if i < len(questions) - 1 else ''
+        print(f"//{i+1}",end=" ")
         print(f'{{"question": "{q["question"]}", "options": {q["options"]}, "answer": {q["answer"]}}}{end}')
 
 
